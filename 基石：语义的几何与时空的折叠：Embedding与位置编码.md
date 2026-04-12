@@ -128,6 +128,11 @@ $$\boldsymbol{q} = q_0 + i q_1 = r_q e^{i\theta_q}$$
 
 $$\boldsymbol{k} = k_0 + i k_1 = r_k e^{i\theta_k}$$
 
+> 欧拉公式 $$\(e^{i\theta} = \cos\theta + i \sin\theta\)$$
+> $$\(x = r \cos\theta\)， \(y = r \sin\theta\)$$
+> 有  $$z = x + i y = r(\cos\theta + i \sin\theta) = r e^{i\theta}$$
+
+
 传统的APE是做加法：$\boldsymbol{q}' = \boldsymbol{q} + \boldsymbol{p}_m$。
 
 RoPE则是做**乘法（旋转）**。我们将位置 $m$ 编码为一个旋转因子 $e^{im\theta}$：
