@@ -157,6 +157,46 @@ $$= \text{Re}\left[ \boldsymbol{q} e^{im\theta} \cdot \boldsymbol{k}^* e^{-in\th
 
 $$= \text{Re}\left[ \boldsymbol{q} \boldsymbol{k}^* \cdot e^{i(m-n)\theta} \right]$$
 
+> **1. 复数向量的内积定义**
+> 对于两个复数 \(a = x_1 + i y_1\) 和 \(b = x_2 + i y_2\)，它们的 **欧几里得点积**（作为二维实向量）是：
+> $$\langle a, b \rangle_{\mathbb{R}^2} = x_1 x_2 + y_1 y_2$$
+> 
+> 这个结果可以用复数运算表示为 **取实部的 Hermitian 内积**：
+> $$\langle a, b \rangle_{\mathbb{R}^2} = \text{Re}\left( a \cdot \overline{b} \right)$$
+> 
+> 其中 $\(\overline{b} = x_2 - i y_2\)$ 是 $\(b\)$ 的复共轭。
+> 
+> 证明：
+> $$a \cdot \overline{b} = (x_1 + i y_1)(x_2 - i y_2) = x_1 x_2 + y_1 y_2 + i (y_1 x_2 - x_1 y_2)$$
+> 
+> 取实部即得 \(x_1 x_2 + y_1 y_2\)。
+> 
+> **2. RoPE 中的内积计算**
+> RoPE 将 Query 和 Key 的二维子向量视为复数：
+> 
+> - $$\(q = r_q e^{i\theta_q}\)$$
+> - $$\(k = r_k e^{i\theta_k}\)$$
+> 
+> 对位置 \(m\) 的 Query 做旋转：  
+> $$\(f(q, m) = q \cdot e^{i m \theta} = r_q e^{i(\theta_q + m\theta)}\)$$
+> 对位置 \(n\) 的 Key 做旋转：
+> $$\(f(k, n) = k \cdot e^{i n \theta} = r_k e^{i(\theta_k + n\theta)}\)$$
+>
+> 它们的 **Attention 内积**（实数相似度）定义为：
+> $$\langle f(q,m), f(k,n) \rangle = \text{Re}\left[ f(q,m) \cdot \overline{f(k,n)} \right]$$
+> 代入表达式：
+> $$f(q,m) \cdot \overline{f(k,n)} = \left( q e^{i m\theta} \right) \cdot \overline{ \left( k e^{i n\theta} \right) }$$
+>
+> 注意：
+> $$\(\overline{ k e^{i n\theta} } = \overline{k} \cdot e^{-i n\theta}\)$$
+> （共轭对乘积取反相位）。
+>
+> 因此：
+> $$= q e^{i m\theta} \cdot \overline{k} e^{-i n\theta} = q \overline{k} \cdot e^{i (m - n) \theta}$$
+>
+>于是：
+> $$\langle f(q,m), f(k,n) \rangle = \text{Re}\left[ q \overline{k} \cdot e^{i (m-n)\theta} \right]$$
+
 **关键结论**：最终的内积结果中，位置信息仅以 $(m-n)$ 的形式出现。 这意味着：**尽管我们对每个Token进行了绝对位置的旋转，但它们之间的相互作用（Attention）完全取决于它们的相对距离。** 这一性质被称为**平移不变性（Translation Invariance）**，它是RoPE能够统领江湖的根本原因 。
 
 ### 4.2 推广到多维空间：分块旋转矩阵
@@ -165,9 +205,50 @@ $$= \text{Re}\left[ \boldsymbol{q} \boldsymbol{k}^* \cdot e^{i(m-n)\theta} \righ
 
 对于第 $j$ 个子空间（即第 $2j$ 和 $2j+1$ 维），我们分配一个特定的旋转频率 $\theta_j$。
 
-整个旋转操作可以表示为一个巨大的分块对角矩阵 $\mathbf{R}_{\Theta, m}$ 乘以向量 $\mathbf{x}$：
+> Attention 分数需要计算旋转后 Query 与 Key 的内积。由于不同子空间之间正交（实内积定义下，不同复数对的实部贡献独立），总内积等于各子空间内积之和：
+>
+> $$\langle f(\boldsymbol{q}, m), f(\boldsymbol{k}, n) \rangle = \sum_{j=0}^{d/2-1} \langle f(\tilde{q}_j, m), f(\tilde{k}_j, n) \rangle$$
+>
+> 对于第 \(j\) 个子空间，根据二维推导结果：
+> $$\langle f(\tilde{q}_j, m), f(\tilde{k}_j, n) \rangle = \text{Re}\left[ \tilde{q}_j \overline{\tilde{k}_j} \cdot e^{i (m-n)\theta_j} \right]$$
+>
+> 因此总内积为：
+> 
+> $$\text{AttentionScore}(\boldsymbol{q}_m, \boldsymbol{k}_n) = \sum_{j=0}^{d/2-1} \text{Re}\left[ \tilde{q}_j \overline{\tilde{k}_j} \cdot e^{i (m-n)\theta_j} \right]$$
+> 
 
-$$\mathbf{R}_{\Theta, m} = \begin{pmatrix} \cos m\theta_0 & -\sin m\theta_0 & 0 & 0 & \cdots \\ \sin m\theta_0 & \cos m\theta_0 & 0 & 0 & \cdots \\ 0 & 0 & \cos m\theta_1 & -\sin m\theta_1 & \cdots \\ 0 & 0 & \sin m\theta_1 & \cos m\theta_1 & \cdots \\ \vdots & \vdots & \vdots & \vdots & \ddots \end{pmatrix}$$
+整个旋转操作可以表示为一个巨大的分块对角矩阵(d\*d) $\mathbf{R}_{\Theta, m}$ 乘以向量 $\mathbf{x}$ (d\*1)：
+
+$$
+\mathbf{R}_{\Theta, m} = \begin{pmatrix}
+\cos m\theta_0 & -\sin m\theta_0 & 0 & 0 & \cdots \\
+\sin m\theta_0 & \cos m\theta_0 & 0 & 0 & \cdots \\
+0 & 0 & \cos m\theta_1 & -\sin m\theta_1 & \cdots \\
+0 & 0 & \sin m\theta_1 & \cos m\theta_1 & \cdots \\
+\vdots & \vdots & \vdots & \vdots & \ddots
+\end{pmatrix}
+$$
+
+> - **复数运算**：
+> $$\(z' = z \cdot e^{i\phi}\)$$
+> 因为 $$\(e^{i\phi} = \cos\phi + i\sin\phi\)$$，展开得
+> 
+> $$\(z' = (x+iy)(\cos\phi + i\sin\phi) = (x\cos\phi - y\sin\phi) + i(x\sin\phi + y\cos\phi)\)$$
+>
+> - **矩阵运算**：
+> 
+> $$
+\begin{bmatrix} x' \\ y' \end{bmatrix} =
+\begin{bmatrix} \cos\phi & -\sin\phi \\
+\sin\phi & \cos\phi \end{bmatrix}
+\begin{bmatrix} x \\
+y \end{bmatrix}
+$$
+> 
+> 结果完全相同。
+> 所以，**复数乘 $\(e^{i\phi}\)$ 与左乘 2×2 旋转矩阵是数学上等价的**。
+>
+> (极坐标只用于推导内积，实际仅用分块对角矩阵计算)
 
 **频率设定**：RoPE沿用了Vaswani正弦编码的几何级数频率设定：
 
@@ -177,7 +258,7 @@ $$\theta_j = \text{base}^{-2j/d}$$
 
 - **低维度（小 $j$）**：$\theta_j$ 很大，旋转速度快，负责捕捉高频的局部位置信息。
 - **高维度（大 $j$）**：$\theta_j$ 很小，旋转速度极慢，负责捕捉低频的全局位置信息。
-
+> 
 ### 4.3 几何直觉：RoPE的“多级时钟”隐喻
 
 为了更直观地理解RoPE，我们可以借用“多级时钟”或“密码锁”的隐喻 。
@@ -202,6 +283,28 @@ Attention计算就是比较Query和Key之间所有指针对的相对角度。由
 | **长距离衰减**     | 无自然衰减                   | 强制线性衰减             | 自然震荡衰减 (Long-term Decay) |
 
 RoPE的一个重要特性是**长程衰减（Long-term Decay）**。随着相对距离 $|m-n|$ 的增加，高频分量的旋转相位差变得随机，内积期望趋向于0。这符合语言模型的局部性原理（Locality），即近处的词通常更重要。这使得RoPE不需要像ALiBi那样硬编码衰减，而是自然涌现出这种性质 。
+
+### 4.5 补充
+1. 为什么 APE 加在输入 embedding 上？  
+绝对位置编码（如 Sinusoidal 或可学习的）的思路是：位置信息是 token 固有属性，应当在进入 Transformer 的第一时间就和语义信息混合。  
+做法：x'_m = x_m + p_m，其中 x_m 是 token 的语义 embedding，p_m 是位置 m 的编码向量。  
+这样，后续所有自注意力层都能看到带位置标记的向量，但代价是位置信息会渗透到每一层的表示中，且与语义纠缠。
+
+2. 为什么 RoPE 只加在 Q 和 K 上？  
+RoPE 的设计哲学不同：位置信息只在计算“两两关系”（attention score）时起作用，而不应污染 token 的语义表示。  
+具体做法：  
+输入 token 的语义 embedding x_m 完全不含位置信息（或者也可以加一个可选的绝对编码，但通常不加）。  
+在每一层，计算 Query 和 Key 时，对 q_m 和 k_n 分别施加与位置相关的旋转，得到 q'_m 和 k'_n。  
+然后计算 q'_m · k'_n 作为 attention 分数。  
+这样做有三个核心好处：  
+- 语义与位置正交：旋转不改变向量的模长，只改变方向，因此语义信息（由方向和模长承载）没有被“加法污染”。后续的 Value 仍使用原始语义，不受位置影响。
+- 自然实现相对位置：内积结果仅依赖于 m-n，无需隐式学习。
+- 可扩展到更长的序列：因为旋转是连续的，即使位置超出训练长度，仍可通过外推技巧（如 NTK-aware scaling）合理猜测旋转角度。
+
+3. 为什么不把旋转也加到 Value 上？  
+RoPE 只旋转 Query 和 Key，不旋转 Value。原因是：Value 负责传递实际内容信息，位置信息不应改变内容本身。Attention 分数已经通过 Q·K 引入了相对位置权重，Value 只需提供语义内容。如果旋转 Value，会无意义地扭曲内容表示。
+
+4. 多层transformer层，每层都需要对Q和K加入RoPE，由于旋转矩阵是分块对角的，因此开销很低
 
 ## 5. 长上下文的挑战：内插与分辨率的博弈
 
